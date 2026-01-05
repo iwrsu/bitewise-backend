@@ -1,14 +1,18 @@
 import express from "express";
-import fetch from "node-fetch";
 import cors from "cors";
+import Groq from "groq-sdk";
 import { SYSTEM_PROMPT } from "./prompt.js";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY
+});
+
 app.get("/", (_, res) => {
-  res.send("AI Food Co-Pilot backend running");
+  res.send("BiteWise backend is running");
 });
 
 /* -------- INTENT ROUTER -------- */
@@ -28,57 +32,47 @@ ${JSON.stringify(data.productA, null, 2)}
 Product B:
 ${JSON.stringify(data.productB, null, 2)}
 
-Help the user choose.
+Help the user decide which is the safer or simpler default and why.
 `;
 
     case "SINGLE_PRODUCT_RISK":
       return `
-The user is looking at a single food product and is unsure if they should worry.
+The user is unsure whether they should worry about a single food product.
 
 Product:
 ${JSON.stringify(data.product, null, 2)}
 
-Help them understand if anything matters and when.
+Explain if anything matters here and in what situations.
 `;
 
     case "INGREDIENT_EXPLAIN":
       return `
-The user is asking about a specific ingredient.
+The user wants to understand a specific ingredient.
 
 Ingredient:
 ${data.ingredient}
 
-Explain whether it is worth worrying about and in what context.
+Explain what it is, why it is used, and when (if ever) it is worth worrying about.
 `;
-
-    /* ---------- FOLLOW-UPS ---------- */
 
     case "FOLLOWUP_WHY":
       return `
-The user wants a deeper explanation of the previous recommendation.
-
-Explain the reasoning more clearly without introducing new ingredients.
+Explain the reasoning behind your previous answer more clearly and simply.
 `;
 
     case "FOLLOWUP_DAILY":
       return `
-The user is asking how the previous recommendation changes if this is eaten frequently.
-
-Explain how frequency affects the decision.
+How does your previous advice change if this product or ingredient is consumed daily?
 `;
 
     case "FOLLOWUP_SAFE":
       return `
-The user wants a clear safer default based on the previous discussion.
-
-Give a concise recommendation and why.
+Give a clear, practical safer default recommendation based on the discussion so far.
 `;
 
     default:
       return `
-The user asked a follow-up question.
-
-Respond helpfully using the previous context.
+Respond helpfully to the user's question using the previous context.
 `;
   }
 }
@@ -89,38 +83,33 @@ app.post("/pipeline", async (req, res) => {
   try {
     const userMessage = buildUserMessage(req.body);
 
-    const response = await fetch("http://localhost:11434/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "llama3.1:8b",
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userMessage }
-        ],
-        stream: false
-      })
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.1-8b-instruct",
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: userMessage }
+      ],
+      temperature: 0.4,
+      max_tokens: 400
     });
 
-    const data = await response.json();
-
-    let explanation =
-      "The AI could not generate a response. Try again.";
-
-    if (data?.message?.content) {
-      explanation = data.message.content;
-    }
+    const explanation =
+      completion.choices?.[0]?.message?.content ||
+      "The AI could not generate a response.";
 
     res.json({ explanation });
 
   } catch (err) {
-    console.error("Pipeline error:", err);
+    console.error("Groq error:", err);
     res.status(500).json({
       explanation: "Something went wrong while reasoning."
     });
   }
 });
 
-app.listen(3000, () => {
-  console.log("Backend running on http://localhost:3000");
+/* -------- SERVER -------- */
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Backend running on port ${PORT}`);
 });

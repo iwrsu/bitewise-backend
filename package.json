@@ -1,15 +1,16 @@
 {
-  "name": "ai-food-copilot-backend",
+  "name": "bitewise-backend",
   "version": "1.0.0",
   "type": "module",
+  "description": "Backend AI reasoning pipeline for BiteWise",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "groq-sdk": "^0.37.0",
-    "node-fetch": "^3.3.2"
+    "groq-sdk": "^0.7.0"
   }
 }
+    
